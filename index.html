@@ -72,6 +72,8 @@
         }
         button:hover { transform: scale(1.1); background: #2980b9; }
 
+        .level-btn { background: #8e44ad; font-size: 0.7rem; padding: 10px; width: 250px; }
+
         /* DIALOGUE BOX */
         #dialogue-box {
             position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%);
@@ -82,11 +84,22 @@
         #dialogue-text { color: #fff; font-size: 12px; line-height: 1.5; }
         #dialogue-hint { text-align: right; font-size: 8px; color: #888; margin-top: 10px; }
 
-        /* POPUP NOTIFICATION (Non-intrusive) */
+        /* POPUP NOTIFICATION */
         #popup-msg {
             position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
             background: rgba(0,0,0,0.8); border: 2px solid #f1c40f; color: #f1c40f;
             padding: 10px 20px; font-size: 12px; pointer-events: none; opacity: 0; transition: opacity 0.5s;
+        }
+
+        /* MOBILE JOYSTICK */
+        #joystick-zone {
+            position: absolute; width: 150px; height: 150px;
+            border-radius: 50%; border: 2px solid rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.1); display: none; pointer-events: none;
+        }
+        #joystick-knob {
+            position: absolute; width: 60px; height: 60px; border-radius: 50%;
+            background: rgba(255, 255, 255, 0.5); left: 45px; top: 45px;
         }
     </style>
 </head>
@@ -109,6 +122,8 @@
         </div>
         <div id="boss-hp-container"><div id="boss-hp-fill"></div></div>
         <div id="popup-msg">GUN UPGRADED!</div>
+        <!-- Joystick Overlay -->
+        <div id="joystick-zone"><div id="joystick-knob"></div></div>
     </div>
 
     <!-- START SCREEN -->
@@ -121,6 +136,18 @@
             <button onclick="startGame('ARCADE')">ARCADE MODE</button>
         </div>
         <p style="margin-top:30px; font-size: 8px; color: #777;">Controls: WASD / Arrows to Move</p>
+    </div>
+
+    <!-- LEVEL SELECT SCREEN (SECRET) -->
+    <div id="level-select-screen" class="screen hidden">
+        <h2 style="color: #f1c40f;">SECRET LEVEL SELECT</h2>
+        <button class="level-btn" onclick="startLevel(1)">1. Munich</button>
+        <button class="level-btn" onclick="startLevel(2)">2. Train</button>
+        <button class="level-btn" onclick="startLevel(3)">3. Hospital</button>
+        <button class="level-btn" onclick="startLevel(4)">4. Prague</button>
+        <button class="level-btn" onclick="startLevel(5)">5. BOSS</button>
+        <button class="level-btn" onclick="startLevel(6)">6. Ending</button>
+        <button style="margin-top: 20px;" onclick="location.reload()">BACK</button>
     </div>
 
     <!-- UPGRADE SCREEN -->
@@ -169,7 +196,6 @@ const AudioSys = {
     
     melody: ['E4','E4','G4','A4','C5','A4','G4', 'G4','A4','G4','E4','D4','E4', 'G4','G4','E4','D4','C4','A3','C4', 'D4','E4','G4','E4','D4','C4'],
     
-    // Extended Boss Loop (Darker/Complex)
     bossMelody: [
         'C3','C3','C3','Eb3','D3','C3','B2','G2', 'C3','C3','C3','F3','Eb3','D3','C3','G2',
         'Ab2','Ab2','G2','F2','G2','Ab2','Bb2','B2', 'C3','D3','Eb3','F3','G3','F3','Eb3','D3',
@@ -241,27 +267,87 @@ let gameState = 'MENU'; let gameMode = 'ARCADE'; let level = 1; let enemiesKille
 let arcadeWave = 1; let timeElapsed = 0; let lastTime = 0;
 const ARCADE_LIMIT = 1500; const MAP_SIZE = 2500;
 
-// Inputs
+// Inputs & Cheats
+let cheatBuffer = "";
 const keys = { w:false, a:false, s:false, d:false };
+
 window.addEventListener('keydown', e => {
+    // Cheat Code
+    cheatBuffer += e.key.toLowerCase();
+    if(cheatBuffer.length > 8) cheatBuffer = cheatBuffer.slice(-8);
+    if(cheatBuffer === "goalpost" && gameState === 'MENU') {
+        document.getElementById('start-screen').classList.add('hidden');
+        document.getElementById('level-select-screen').classList.remove('hidden');
+    }
+
     if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true;
     if(e.key === ' ' && gameState === 'PAUSE_DIALOGUE') advanceDialogue();
 });
 window.addEventListener('keyup', e => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false; });
 window.addEventListener('mousedown', () => { if(gameState === 'PAUSE_DIALOGUE') advanceDialogue(); });
+
+// MOBILE TOUCH CONTROLS (JOYSTICK)
 let touchStart = null;
+const joyZone = document.getElementById('joystick-zone');
+const joyKnob = document.getElementById('joystick-knob');
+
 window.addEventListener('touchstart', e => {
+    if(gameState === 'PAUSE_DIALOGUE') { advanceDialogue(); return; }
+    
+    // Show Joystick
     touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    if(gameState === 'PAUSE_DIALOGUE') advanceDialogue();
+    joyZone.style.display = 'block';
+    joyZone.style.left = (touchStart.x - 75) + 'px';
+    joyZone.style.top = (touchStart.y - 75) + 'px';
+    joyKnob.style.left = '45px'; joyKnob.style.top = '45px';
 }, {passive: false});
+
 window.addEventListener('touchmove', e => {
     e.preventDefault(); if(!touchStart) return;
-    const dx = e.touches[0].clientX - touchStart.x; const dy = e.touches[0].clientY - touchStart.y;
+    
+    const cx = e.touches[0].clientX; const cy = e.touches[0].clientY;
+    const dx = cx - touchStart.x; const dy = cy - touchStart.y;
+    
+    // Move Knob Visual
+    const dist = Math.min(Math.hypot(dx, dy), 75);
+    const angle = Math.atan2(dy, dx);
+    const kx = Math.cos(angle) * dist; const ky = Math.sin(angle) * dist;
+    joyKnob.style.left = (45 + kx) + 'px';
+    joyKnob.style.top = (45 + ky) + 'px';
+
+    // 8-Directional Logic
     keys.w = keys.s = keys.a = keys.d = false;
-    if(Math.abs(dx) > 20) dx > 0 ? keys.d = true : keys.a = true;
-    if(Math.abs(dy) > 20) dy > 0 ? keys.s = true : keys.w = true;
+    const threshold = 20;
+    
+    if (dist > threshold) {
+        // Convert angle to octants
+        const deg = angle * (180/Math.PI);
+        
+        // Right
+        if (deg > -22.5 && deg <= 22.5) { keys.d = true; }
+        // Bottom-Right
+        else if (deg > 22.5 && deg <= 67.5) { keys.d = true; keys.s = true; }
+        // Bottom
+        else if (deg > 67.5 && deg <= 112.5) { keys.s = true; }
+        // Bottom-Left
+        else if (deg > 112.5 && deg <= 157.5) { keys.s = true; keys.a = true; }
+        // Left
+        else if (Math.abs(deg) > 157.5) { keys.a = true; }
+        // Top-Left
+        else if (deg < -112.5 && deg >= -157.5) { keys.a = true; keys.w = true; }
+        // Top
+        else if (deg < -67.5 && deg >= -112.5) { keys.w = true; }
+        // Top-Right
+        else if (deg < -22.5 && deg >= -67.5) { keys.w = true; keys.d = true; }
+    }
+
 }, {passive: false});
-window.addEventListener('touchend', () => { keys.w = keys.s = keys.a = keys.d = false; touchStart = null; });
+
+window.addEventListener('touchend', () => { 
+    keys.w = keys.s = keys.a = keys.d = false; 
+    touchStart = null;
+    joyZone.style.display = 'none';
+});
 
 function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
 window.addEventListener('resize', resize); resize();
@@ -609,6 +695,7 @@ function startGame(mode) {
     boss = null; generateMap(); AudioSys.init(); AudioSys.playBGM(false);
     
     document.getElementById('start-screen').classList.add('hidden');
+    document.getElementById('level-select-screen').classList.add('hidden');
     document.getElementById('victory-screen').classList.add('hidden');
     document.getElementById('game-over-screen').classList.add('hidden');
     document.getElementById('boss-hp-container').style.display = 'none';
@@ -616,6 +703,11 @@ function startGame(mode) {
     if(gameMode === 'STORY') loadLevel(1);
     else { gameState = 'PLAY'; document.getElementById('location-text').innerText = "ARCADE"; document.getElementById('objective-text').innerText = "SURVIVE"; }
     lastTime = performance.now(); requestAnimationFrame(gameLoop);
+}
+
+function startLevel(lvl) {
+    startGame('STORY');
+    loadLevel(lvl);
 }
 
 function loadLevel(lvl) {
