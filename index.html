@@ -73,6 +73,19 @@
         button:hover { transform: scale(1.1); background: #2980b9; }
 
         .level-btn { background: #8e44ad; font-size: 0.7rem; padding: 10px; width: 250px; }
+        .char-btn { background: #27ae60; font-size: 0.8rem; width: 150px; display: inline-block; }
+
+        /* UPGRADE OVERLAY (Seamless) */
+        #upgrade-overlay {
+            position: absolute; top: 100px; left: 50%; transform: translateX(-50%);
+            display: flex; flex-direction: row; gap: 10px; pointer-events: all;
+            z-index: 90;
+        }
+        .upgrade-card {
+            background: rgba(0,0,0,0.8); border: 2px solid #f1c40f; padding: 10px;
+            color: #fff; font-size: 10px; cursor: pointer; width: 100px; text-align: center;
+        }
+        .upgrade-card:hover { background: #f1c40f; color: #000; }
 
         /* DIALOGUE BOX */
         #dialogue-box {
@@ -101,6 +114,10 @@
             position: absolute; width: 60px; height: 60px; border-radius: 50%;
             background: rgba(255, 255, 255, 0.5); left: 45px; top: 45px;
         }
+        
+        #char-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 600px;
+        }
     </style>
 </head>
 <body>
@@ -122,7 +139,14 @@
         </div>
         <div id="boss-hp-container"><div id="boss-hp-fill"></div></div>
         <div id="popup-msg">GUN UPGRADED!</div>
-        <!-- Joystick Overlay -->
+        
+        <!-- Seamless Upgrade Menu -->
+        <div id="upgrade-overlay" class="hidden">
+            <div class="upgrade-card" onclick="applyUpgrade('speed')">⚡ SPEED</div>
+            <div class="upgrade-card" onclick="applyUpgrade('damage')">⚔️ DMG</div>
+            <div class="upgrade-card" onclick="applyUpgrade('heal')">❤️ HEAL</div>
+        </div>
+
         <div id="joystick-zone"><div id="joystick-knob"></div></div>
     </div>
 
@@ -133,9 +157,25 @@
         <p>5 Levels. 1 Bullet Hell Boss. 1 Waifu.</p>
         <div class="btn-group">
             <button onclick="startGame('STORY')">STORY MODE</button>
-            <button onclick="startGame('ARCADE')">ARCADE MODE</button>
+            <button onclick="showCharSelect()">ARCADE MODE</button>
         </div>
         <p style="margin-top:30px; font-size: 8px; color: #777;">Controls: WASD / Arrows to Move</p>
+    </div>
+
+    <!-- CHARACTER SELECT (ARCADE) -->
+    <div id="char-select-screen" class="screen hidden">
+        <h2>CHOOSE YOUR FIGHTER</h2>
+        <div id="char-grid">
+            <button class="char-btn" onclick="startArcade('Connery')">Connery 🟢</button>
+            <button class="char-btn" onclick="startArcade('Bakshi')">Bakshi 🐵</button>
+            <button class="char-btn" onclick="startArcade('Rishi')">Rishi 🧀</button>
+            <button class="char-btn" onclick="startArcade('Ibby')">Ibby 💪</button>
+            <button class="char-btn" onclick="startArcade('Sean')">Sean 💻</button>
+            <button class="char-btn" onclick="startArcade('Samir')">Samir 💅</button>
+            <button class="char-btn" onclick="startArcade('Sebastian')">Seb 👨‍🦰</button>
+            <button class="char-btn" onclick="startArcade('Hu Tao')">Hu Tao 👻</button>
+        </div>
+        <button onclick="location.reload()" style="margin-top:20px; background:#e74c3c;">BACK</button>
     </div>
 
     <!-- LEVEL SELECT SCREEN (SECRET) -->
@@ -148,15 +188,6 @@
         <button class="level-btn" onclick="startLevel(5)">5. BOSS</button>
         <button class="level-btn" onclick="startLevel(6)">6. Ending</button>
         <button style="margin-top: 20px;" onclick="location.reload()">BACK</button>
-    </div>
-
-    <!-- UPGRADE SCREEN -->
-    <div id="upgrade-screen" class="screen hidden">
-        <h2>WAVE COMPLETE!</h2>
-        <p>Choose an upgrade:</p>
-        <button onclick="applyUpgrade('speed')">Speed +</button>
-        <button onclick="applyUpgrade('damage')">Dmg +</button>
-        <button onclick="applyUpgrade('heal')">Heal Full</button>
     </div>
 
     <!-- GAME OVER SCREEN -->
@@ -193,22 +224,14 @@ IMAGES.kiss.src = "https://cdn.discordapp.com/attachments/426860684500795394/144
 /** AUDIO SYSTEM */
 const AudioSys = {
     ctx: null, isPlaying: false, currentTrack: 'normal',
-    
     melody: ['E4','E4','G4','A4','C5','A4','G4', 'G4','A4','G4','E4','D4','E4', 'G4','G4','E4','D4','C4','A3','C4', 'D4','E4','G4','E4','D4','C4'],
-    
     bossMelody: [
         'C3','C3','C3','Eb3','D3','C3','B2','G2', 'C3','C3','C3','F3','Eb3','D3','C3','G2',
         'Ab2','Ab2','G2','F2','G2','Ab2','Bb2','B2', 'C3','D3','Eb3','F3','G3','F3','Eb3','D3',
         'C2','C2','C3','C3','Eb3','D3','C3','B2', 'G2','G2','B2','B2','D3','C3','B2','G2'
     ],
-    
-    noteFreqs: {
-        'F2':87, 'G2':98, 'Ab2':103, 'A2':110, 'Bb2':116, 'B2':123, 'C3':130, 'D3':146, 'Eb3':155, 'E3':164, 'F3':174, 'G3':196,
-        'A3':220, 'C4':261, 'D4':293, 'E4':329, 'G4':392, 'A4':440, 'C5':523, 'D5':587
-    },
-    
+    noteFreqs: { 'F2':87, 'G2':98, 'Ab2':103, 'A2':110, 'Bb2':116, 'B2':123, 'C3':130, 'D3':146, 'Eb3':155, 'E3':164, 'F3':174, 'G3':196, 'A3':220, 'C4':261, 'D4':293, 'E4':329, 'G4':392, 'A4':440, 'C5':523, 'D5':587 },
     init() { window.AudioContext = window.AudioContext || window.webkitAudioContext; this.ctx = new AudioContext(); },
-    
     playTone(freq, type='sine', duration=0.1, vol=0.1) {
         if(!this.ctx) return;
         const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
@@ -218,7 +241,6 @@ const AudioSys = {
         osc.connect(gain); gain.connect(this.ctx.destination);
         osc.start(); osc.stop(this.ctx.currentTime + duration);
     },
-
     playBGM(isBoss = false) {
         if(!this.ctx) return;
         if(this.isPlaying && this.currentTrack !== (isBoss ? 'boss' : 'normal')) {
@@ -226,32 +248,25 @@ const AudioSys = {
         }
         if(!this.isPlaying) this.startLoop(isBoss);
     },
-
     startLoop(isBoss) {
         this.isPlaying = true; this.currentTrack = isBoss ? 'boss' : 'normal';
         let noteIdx = 0; const track = isBoss ? this.bossMelody : this.melody;
         const speed = isBoss ? 160 : 600;
-
         const loop = () => {
             if(!this.isPlaying || (isBoss && this.currentTrack !== 'boss') || (!isBoss && this.currentTrack !== 'normal')) return;
-            const note = track[noteIdx];
-            const freq = this.noteFreqs[note] || 200;
+            const note = track[noteIdx]; const freq = this.noteFreqs[note] || 200;
             const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
-            osc.type = isBoss ? 'sawtooth' : 'triangle';
-            osc.frequency.value = freq;
+            osc.type = isBoss ? 'sawtooth' : 'triangle'; osc.frequency.value = freq;
             let vol = isBoss ? 0.15 : 0.05;
             gain.gain.setValueAtTime(0, this.ctx.currentTime);
             gain.gain.linearRampToValueAtTime(vol, this.ctx.currentTime + 0.05);
             gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + (speed/1000));
             osc.connect(gain); gain.connect(this.ctx.destination);
             osc.start(); osc.stop(this.ctx.currentTime + (speed/1000) + 0.1);
-            
-            noteIdx = (noteIdx + 1) % track.length;
-            setTimeout(loop, speed);
+            noteIdx = (noteIdx + 1) % track.length; setTimeout(loop, speed);
         };
         loop();
     },
-
     stopBGM() { this.isPlaying = false; },
     sfxThrow() { this.playTone(400, 'square', 0.1, 0.05); },
     sfxHit() { this.playTone(100, 'sawtooth', 0.2, 0.1); },
@@ -264,89 +279,66 @@ const AudioSys = {
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 let gameState = 'MENU'; let gameMode = 'ARCADE'; let level = 1; let enemiesKilled = 0; let score = 0;
-let arcadeWave = 1; let timeElapsed = 0; let lastTime = 0;
+let arcadeWave = 1; let enemiesInWave = 0; let waveKills = 0; 
+let timeElapsed = 0; let lastTime = 0;
 const ARCADE_LIMIT = 1500; const MAP_SIZE = 2500;
+let dialogueCooldown = 0; 
+let playerSkin = 'Connery';
+let bossDeathTimer = 0;
 
-// Inputs & Cheats
-let cheatBuffer = "";
 const keys = { w:false, a:false, s:false, d:false };
+let cheatBuffer = "";
 
 window.addEventListener('keydown', e => {
-    // Cheat Code
     cheatBuffer += e.key.toLowerCase();
     if(cheatBuffer.length > 8) cheatBuffer = cheatBuffer.slice(-8);
     if(cheatBuffer === "goalpost" && gameState === 'MENU') {
         document.getElementById('start-screen').classList.add('hidden');
         document.getElementById('level-select-screen').classList.remove('hidden');
     }
-
     if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true;
     if(e.key === ' ' && gameState === 'PAUSE_DIALOGUE') advanceDialogue();
 });
 window.addEventListener('keyup', e => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false; });
 window.addEventListener('mousedown', () => { if(gameState === 'PAUSE_DIALOGUE') advanceDialogue(); });
 
-// MOBILE TOUCH CONTROLS (JOYSTICK)
+// MOBILE TOUCH
 let touchStart = null;
 const joyZone = document.getElementById('joystick-zone');
 const joyKnob = document.getElementById('joystick-knob');
 
 window.addEventListener('touchstart', e => {
     if(gameState === 'PAUSE_DIALOGUE') { advanceDialogue(); return; }
-    
-    // Show Joystick
     touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     joyZone.style.display = 'block';
-    joyZone.style.left = (touchStart.x - 75) + 'px';
-    joyZone.style.top = (touchStart.y - 75) + 'px';
+    joyZone.style.left = (touchStart.x - 75) + 'px'; joyZone.style.top = (touchStart.y - 75) + 'px';
     joyKnob.style.left = '45px'; joyKnob.style.top = '45px';
 }, {passive: false});
 
 window.addEventListener('touchmove', e => {
     e.preventDefault(); if(!touchStart) return;
-    
     const cx = e.touches[0].clientX; const cy = e.touches[0].clientY;
     const dx = cx - touchStart.x; const dy = cy - touchStart.y;
-    
-    // Move Knob Visual
     const dist = Math.min(Math.hypot(dx, dy), 75);
     const angle = Math.atan2(dy, dx);
-    const kx = Math.cos(angle) * dist; const ky = Math.sin(angle) * dist;
-    joyKnob.style.left = (45 + kx) + 'px';
-    joyKnob.style.top = (45 + ky) + 'px';
-
-    // 8-Directional Logic
+    joyKnob.style.left = (45 + Math.cos(angle)*dist) + 'px';
+    joyKnob.style.top = (45 + Math.sin(angle)*dist) + 'px';
     keys.w = keys.s = keys.a = keys.d = false;
-    const threshold = 20;
-    
-    if (dist > threshold) {
-        // Convert angle to octants
+    if (dist > 20) {
         const deg = angle * (180/Math.PI);
-        
-        // Right
         if (deg > -22.5 && deg <= 22.5) { keys.d = true; }
-        // Bottom-Right
         else if (deg > 22.5 && deg <= 67.5) { keys.d = true; keys.s = true; }
-        // Bottom
         else if (deg > 67.5 && deg <= 112.5) { keys.s = true; }
-        // Bottom-Left
         else if (deg > 112.5 && deg <= 157.5) { keys.s = true; keys.a = true; }
-        // Left
         else if (Math.abs(deg) > 157.5) { keys.a = true; }
-        // Top-Left
         else if (deg < -112.5 && deg >= -157.5) { keys.a = true; keys.w = true; }
-        // Top
         else if (deg < -67.5 && deg >= -112.5) { keys.w = true; }
-        // Top-Right
         else if (deg < -22.5 && deg >= -67.5) { keys.w = true; keys.d = true; }
     }
-
 }, {passive: false});
 
 window.addEventListener('touchend', () => { 
-    keys.w = keys.s = keys.a = keys.d = false; 
-    touchStart = null;
-    joyZone.style.display = 'none';
+    keys.w = keys.s = keys.a = keys.d = false; touchStart = null; joyZone.style.display = 'none';
 });
 
 function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
@@ -354,30 +346,18 @@ window.addEventListener('resize', resize); resize();
 
 // --- ENTITIES ---
 class Entity {
-    constructor(x, y, radius) {
-        this.x = x;
-        this.y = y;
-        this.radius = radius;
-        this.markedForDeletion = false;
-    }
+    constructor(x, y, radius) { this.x = x; this.y = y; this.radius = radius; this.markedForDeletion = false; }
 }
 
 class Particle {
     constructor(x, y, color, speedScale = 1) {
         this.x = x; this.y = y; this.color = color;
-        const a = Math.random() * Math.PI * 2; 
-        const s = (Math.random() * 100 + 50) * speedScale;
+        const a = Math.random() * Math.PI * 2; const s = (Math.random() * 100 + 50) * speedScale;
         this.vx = Math.cos(a) * s; this.vy = Math.sin(a) * s;
         this.life = 0.8; this.size = Math.random() * 4 + 2;
     }
-    update(dt) {
-        this.x += this.vx * dt; this.y += this.vy * dt;
-        this.life -= dt; this.size *= 0.95;
-    }
-    draw(ctx) {
-        ctx.fillStyle = this.color; ctx.globalAlpha = this.life;
-        ctx.fillRect(this.x, this.y, this.size, this.size); ctx.globalAlpha = 1;
-    }
+    update(dt) { this.x += this.vx * dt; this.y += this.vy * dt; this.life -= dt; this.size *= 0.95; }
+    draw(ctx) { ctx.fillStyle = this.color; ctx.globalAlpha = this.life; ctx.fillRect(this.x, this.y, this.size, this.size); ctx.globalAlpha = 1; }
 }
 
 class Player {
@@ -389,52 +369,67 @@ class Player {
     }
     update(dt, walls) {
         let dx = 0, dy = 0;
-        if(keys.w) dy = -1; if(keys.s) dy = 1; if(keys.a) dx = -1; if(keys.d) dx = 1;
-        if(dx !== 0 || dy !== 0) { const len = Math.hypot(dx, dy); dx /= len; dy /= len; }
-        let nx = this.x + dx * this.speed * dt; let ny = this.y + dy * this.speed * dt;
+        // Lock move only in End Phase 1
+        if (level !== 6 || endingPhase >= 2) {
+            if(keys.w) dy = -1; if(keys.s) dy = 1; if(keys.a) dx = -1; if(keys.d) dx = 1;
+            if(dx !== 0 || dy !== 0) { const len = Math.hypot(dx, dy); dx /= len; dy /= len; }
+        }
+        let spd = this.speed; if (level === 3 || level === 4) spd *= 1.1; 
+        let nx = this.x + dx * spd * dt; let ny = this.y + dy * spd * dt;
         if(!checkWallCollision(nx, this.y, this.radius, walls)) this.x = nx;
         if(!checkWallCollision(this.x, ny, this.radius, walls)) this.y = ny;
-
         if(gameMode === 'ARCADE' || level === 5) { 
             const limit = level === 5 ? 900 : ARCADE_LIMIT;
-            this.x = Math.max(-limit, Math.min(limit, this.x));
-            this.y = Math.max(-limit, Math.min(limit, this.y));
+            this.x = Math.max(-limit, Math.min(limit, this.x)); this.y = Math.max(-limit, Math.min(limit, this.y));
         }
-
         this.swordAngle += 6 * dt; this.diceTimer += dt;
         let fireRate = level === 5 ? 0.2 : 0.6; 
         if(this.diceTimer > fireRate) { this.diceTimer = 0; shootDice(); }
     }
     draw(ctx) {
-        ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(this.x, this.y+12, 12, 6, 0, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = '#44bd32'; ctx.fillRect(this.x-14, this.y-14, 28, 28);
-        ctx.fillStyle = 'black'; ctx.fillRect(this.x-8, this.y-6, 4, 4); ctx.fillRect(this.x+4, this.y-6, 4, 4); ctx.fillRect(this.x-4, this.y+4, 8, 2);
-        ctx.fillStyle = '#f1c40f'; ctx.beginPath(); ctx.moveTo(this.x-10, this.y-14); ctx.lineTo(this.x+10, this.y-14); ctx.lineTo(this.x, this.y-35); ctx.fill();
+        let dance = (level === 6 && endingPhase >= 2) ? Math.sin(Date.now()/100)*5 : 0;
         
-        const sx = this.x + Math.cos(this.swordAngle) * 70; const sy = this.y + Math.sin(this.swordAngle) * 70;
-        ctx.save(); ctx.translate(sx, sy); ctx.rotate(this.swordAngle + Math.PI/4);
-        ctx.fillStyle = '#00ffff'; ctx.fillRect(-4, -20, 8, 40); ctx.fillStyle = '#8B4513'; ctx.fillRect(-8, 15, 16, 4); ctx.fillRect(-3, 19, 6, 10);
-        ctx.restore();
+        // Draw Skin
+        if (playerSkin === 'Connery') {
+            ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(this.x, this.y+12, 12, 6, 0, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#44bd32'; ctx.fillRect(this.x-14, this.y-14+dance, 28, 28);
+            ctx.fillStyle = 'black'; ctx.fillRect(this.x-8, this.y-6+dance, 4, 4); ctx.fillRect(this.x+4, this.y-6+dance, 4, 4); ctx.fillRect(this.x-4, this.y+4+dance, 8, 2);
+            ctx.fillStyle = '#f1c40f'; ctx.beginPath(); ctx.moveTo(this.x-10, this.y-14+dance); ctx.lineTo(this.x+10, this.y-14+dance); ctx.lineTo(this.x, this.y-35+dance); ctx.fill();
+        } else {
+            let emoji = '🟢';
+            if(playerSkin === 'Bakshi') emoji = '🐵';
+            if(playerSkin === 'Rishi') emoji = '🧀';
+            if(playerSkin === 'Ibby') emoji = '💪';
+            if(playerSkin === 'Sean') emoji = '💻';
+            if(playerSkin === 'Samir') emoji = '💅';
+            if(playerSkin === 'Sebastian') emoji = '👨‍🦰';
+            if(playerSkin === 'Hu Tao') emoji = '👻';
+            ctx.font = '30px Arial'; ctx.textAlign = 'center'; ctx.fillText(emoji, this.x, this.y + 10 + dance);
+        }
+
+        // Hide sword during ending
+        if (level !== 6) {
+            const sx = this.x + Math.cos(this.swordAngle) * 70; const sy = this.y + Math.sin(this.swordAngle) * 70;
+            ctx.save(); ctx.translate(sx, sy); ctx.rotate(this.swordAngle + Math.PI/4);
+            ctx.fillStyle = '#00ffff'; ctx.fillRect(-4, -20, 8, 40); ctx.fillStyle = '#8B4513'; ctx.fillRect(-8, 15, 16, 4); ctx.fillRect(-3, 19, 6, 10);
+            ctx.restore();
+        }
     }
 }
 
 class Enemy extends Entity {
     constructor(type, x, y) {
         super(x, y, 20); this.type = type; this.pushX = 0; this.pushY = 0;
-        
-        // UPDATED STATS
         if(type === 'WOBBUFFET') { this.maxHp = 30; this.speed = 110; this.damage = 1.5; } 
         else if (type === 'APPLE') { this.maxHp = 25; this.speed = 190; this.damage = 2; } 
         else if (type === 'POLICE') { this.maxHp = 50; this.speed = 130; this.damage = 1.5; }
         else if (type === 'TICKET') { this.maxHp = 25; this.speed = 140; this.damage = 1.5; }
         else if (type === 'ROLL') { this.maxHp = 30; this.speed = 210; this.damage = 5; }
         else if (type === 'CREEPER') { this.maxHp = 25; this.speed = 100; this.damage = 3; } 
-        else if (type === 'FIREBALL') { this.maxHp = 1; this.speed = 200; this.radius = 10; this.damage = 15; }
-        
+        else if (type === 'FIREBALL') { this.maxHp = 1; this.speed = 200; this.radius = 10; this.damage = 20; }
+        if (level === 3 || level === 4) this.speed *= 1.1;
         this.hp = this.maxHp;
-        if (gameMode === 'ARCADE') {
-            this.hp += (arcadeWave * 5); this.speed += (arcadeWave * 3); this.damage += (arcadeWave * 0.5);
-        }
+        if (gameMode === 'ARCADE') { this.hp += (arcadeWave * 5); this.speed += (arcadeWave * 3); this.damage += (arcadeWave * 0.5); }
     }
     update(dt, player, walls) {
         let angle = Math.atan2(player.y - this.y, player.x - this.x);
@@ -475,38 +470,25 @@ class Enemy extends Entity {
 
 class EnderDragon extends Entity {
     constructor() {
-        super(0, -600, 80);
-        this.hp = 10000; this.maxHp = 10000;
+        super(0, -600, 80); this.hp = 10000; this.maxHp = 10000;
         this.timer = 0; this.phase = 0; this.subPhase = 0;
-        this.targetX = 0; this.targetY = -400;
-        this.color = '#a020f0';
+        this.targetX = 0; this.targetY = -400; this.color = '#a020f0';
         this.hasUpgradedPlayer = false;
     }
     update(dt) {
         this.timer += dt;
         this.x += (this.targetX - this.x) * 0.05; this.y += (this.targetY - this.y) * 0.05;
 
-        // Upgrade Check (66% HP remaining)
         if(!this.hasUpgradedPlayer && this.hp < 6600) {
-            this.hasUpgradedPlayer = true;
-            player.doubleShot = true;
-            showPopup("Hu Tao: I upgraded your gun! Double shot active!");
+            this.hasUpgradedPlayer = true; player.doubleShot = true; showPopup("Hu Tao: I upgraded your gun! Double shot active!");
         }
 
-        // --- ATTACK SEQUENCES ---
-        // Switch phase every 6 seconds
         if(this.timer > 6.0) {
-            this.timer = 0;
-            this.phase = (this.phase + 1) % 3;
-            this.subPhase = 0;
-            AudioSys.sfxBossRoar();
+            this.timer = 0; this.phase = (this.phase + 1) % 3; this.subPhase = 0; AudioSys.sfxBossRoar();
         }
 
-        // Sub-phase logic within the 6s window
         if(this.phase === 0) { 
-            // PHASE 1: ORANGE - Tri-Strafe Circle
-            this.color = '#e67e22';
-            if(Math.floor(this.timer) > this.subPhase) {
+            this.color = '#e67e22'; if(Math.floor(this.timer) > this.subPhase) {
                 this.subPhase++;
                 if(this.subPhase === 1) { this.targetX = 0; this.shootRing(16); }
                 if(this.subPhase === 2) { this.targetX = -600; this.shootRing(12); }
@@ -514,43 +496,36 @@ class EnderDragon extends Entity {
                 if(this.subPhase === 4) { this.targetX = 0; this.shootRing(16); }
             }
         } else if (this.phase === 1) {
-            // PHASE 2: PURPLE - Void Rain
-            this.color = '#8e44ad';
-            this.targetX = 0; this.targetY = -500;
-            if((this.timer * 10) % 2 < 1 && Math.random()>0.5) { // Frequent drops
-                let x = (Math.random()*1600) - 800;
-                let fb = new Enemy('FIREBALL', x, -900);
-                fb.vx = 0; fb.vy = 400; fb.update = function(dt) { this.x += this.vx*dt; this.y += this.vy*dt; };
-                enemies.push(fb);
+            this.color = '#8e44ad'; this.targetX = 0; this.targetY = -500;
+            if((this.timer * 10) % 2 < 1 && Math.random()>0.5) {
+                let x = (Math.random()*1600) - 800; let fb = new Enemy('FIREBALL', x, -900);
+                fb.vx = 0; fb.vy = 400; fb.update = function(dt) { this.x += this.vx*dt; this.y += this.vy*dt; }; enemies.push(fb);
             }
         } else {
-            // PHASE 3: RED - Laser Burst (SLOWER NOW)
-            this.color = '#c0392b';
-            this.targetX = player.x; this.targetY = player.y - 300;
-            if(this.timer % 0.6 < 0.1) { // 0.6s gap (Slower)
+            this.color = '#c0392b'; this.targetX = player.x; this.targetY = player.y - 300;
+            if(this.timer % 0.6 < 0.1) {
                 let angle = Math.atan2(player.y - this.y, player.x - this.x);
                 let fb = new Enemy('FIREBALL', this.x, this.y);
                 fb.vx = Math.cos(angle)*400; fb.vy = Math.sin(angle)*400;
-                fb.update = function(dt) { this.x += this.vx*dt; this.y += this.vy*dt; };
-                enemies.push(fb);
+                fb.update = function(dt) { this.x += this.vx*dt; this.y += this.vy*dt; }; enemies.push(fb);
             }
         }
     }
     shootRing(count) {
         for(let i=0; i<count; i++) {
-            let angle = (Math.PI * 2 / count) * i;
-            let fb = new Enemy('FIREBALL', this.x, this.y);
+            let angle = (Math.PI * 2 / count) * i; let fb = new Enemy('FIREBALL', this.x, this.y);
             fb.vx = Math.cos(angle)*300; fb.vy = Math.sin(angle)*300;
-            fb.update = function(dt) { this.x += this.vx*dt; this.y += this.vy*dt; };
-            enemies.push(fb);
+            fb.update = function(dt) { this.x += this.vx*dt; this.y += this.vy*dt; }; enemies.push(fb);
         }
     }
     draw(ctx) {
         ctx.save(); ctx.translate(this.x, this.y);
-        ctx.fillStyle = 'black'; ctx.fillRect(-60, -40, 120, 80); 
-        ctx.fillStyle = this.color; ctx.fillRect(-50, -20, 20, 10); ctx.fillRect(30, -20, 20, 10);
-        ctx.fillStyle = '#222';
-        let wingFlap = Math.sin(Date.now()/150) * 40;
+        // Shake if dying
+        if(gameState === 'BOSS_DEATH') {
+            ctx.translate((Math.random()-0.5)*20, (Math.random()-0.5)*20);
+        }
+        ctx.fillStyle = 'black'; ctx.fillRect(-60, -40, 120, 80); ctx.fillStyle = this.color; ctx.fillRect(-50, -20, 20, 10); ctx.fillRect(30, -20, 20, 10);
+        ctx.fillStyle = '#222'; let wingFlap = Math.sin(Date.now()/150) * 40;
         ctx.beginPath(); ctx.moveTo(-60, 0); ctx.lineTo(-200, -80 + wingFlap); ctx.lineTo(-80, 50); ctx.fill();
         ctx.beginPath(); ctx.moveTo(60, 0); ctx.lineTo(200, -80 + wingFlap); ctx.lineTo(80, 50); ctx.fill();
         ctx.restore();
@@ -560,58 +535,57 @@ class EnderDragon extends Entity {
 class Friend extends Entity {
     constructor(name, emoji, x, y) { super(x, y, 20); this.name = name; this.emoji = emoji; this.actionTimer = 0; this.bossHealTimer = 0; }
     update(dt, enemies, player, friends) {
-        if(level === 5 && boss) { // Level 5 is BOSS
-            // Friends attack boss
-            let dx = (boss.x + (Math.random()-0.5)*200) - this.x;
-            let dy = (boss.y + 300) - this.y;
+        if(level === 5 && boss) { 
+            let dx = (boss.x + (Math.random()-0.5)*200) - this.x; let dy = (boss.y + 300) - this.y;
             this.x += dx * 0.02; this.y += dy * 0.02;
-            
             this.actionTimer += dt;
-            if(this.actionTimer > 1.5) {
-                this.actionTimer = 0;
-                projectiles.push(new Projectile(this.x, this.y, Math.atan2(boss.y-this.y, boss.x-this.x), 'DICE'));
-            }
-
-            // SAMIR ULTIMATE HEAL
+            if(this.actionTimer > 1.5) { this.actionTimer = 0; projectiles.push(new Projectile(this.x, this.y, Math.atan2(boss.y-this.y, boss.x-this.x), 'DICE')); }
             if (this.name === 'Samir') {
                 this.bossHealTimer += dt;
                 if (this.bossHealTimer > 20) {
-                    this.bossHealTimer = 0;
-                    player.hp = Math.min(125, player.hp + 50);
-                    floatingTexts.push(new FloatingText(player.x, player.y - 20, "SLAY QUEEN +50HP", "#ff00ff"));
-                    AudioSys.sfxHeal();
+                    this.bossHealTimer = 0; player.hp = Math.min(125, player.hp + 75); 
+                    floatingTexts.push(new FloatingText(player.x, player.y - 20, "SLAY QUEEN +75HP", "#ff00ff")); AudioSys.sfxHeal();
                 }
             }
             return;
         }
-
+        if(level === 6 && endingPhase === 1) { // ENDING WALK (No separation)
+            let angle = (friends.indexOf(this) / friends.length) * Math.PI * 2;
+            let tx = Math.cos(angle) * 150; let ty = 350 + Math.sin(angle) * 100;
+            let dx = tx - this.x; let dy = ty - this.y;
+            if(Math.abs(dx)>5 || Math.abs(dy)>5) { this.x += dx*2*dt; this.y += dy*2*dt; }
+            return;
+        }
         let sepX = 0, sepY = 0;
         friends.forEach(f => { if(f !== this) { let d = Math.hypot(this.x - f.x, this.y - f.y); if(d < 50) { sepX += (this.x-f.x)/d; sepY += (this.y-f.y)/d; } } });
         let dist = Math.hypot(player.x - this.x, player.y - this.y);
         if(dist > 120) {
             let angle = Math.atan2(player.y - this.y, player.x - this.x);
-            this.x += (Math.cos(angle) * 220 + sepX * 100) * dt;
-            this.y += (Math.sin(angle) * 220 + sepY * 100) * dt;
+            this.x += (Math.cos(angle) * 220 + sepX * 100) * dt; this.y += (Math.sin(angle) * 220 + sepY * 100) * dt;
         }
         this.actionTimer += dt;
-        
         if(this.name === 'Bakshi' && this.actionTimer > 1.0) {
             this.actionTimer = 0; if(enemies.length) { let e = enemies[Math.floor(Math.random()*enemies.length)]; projectiles.push(new Projectile(this.x, this.y, Math.atan2(e.y-this.y, e.x-this.x), 'BANANA')); }
         } else if(this.name === 'Rishi' && this.actionTimer > 3) {
             this.actionTimer = 0; floatingTexts.push(new FloatingText(this.x, this.y-40, "FULL BOX!", "#f1c40f"));
-            enemies.forEach(e => { if(Math.hypot(e.x-this.x, e.y-this.y) < 250) { e.pushX = (e.x-this.x)*8; e.pushY = (e.y-this.y)*8; } });
+            enemies.forEach(e => { if(Math.hypot(e.x-this.x, e.y-this.y) < 250) { e.hp -= 15*dt; e.pushX = (e.x-this.x)*8; e.pushY = (e.y-this.y)*8; } });
         } else if(this.name === 'Samir' && this.actionTimer > 2) {
             this.actionTimer = 0; if(player.hp < 125) { player.hp = Math.min(125, player.hp + 3); floatingTexts.push(new FloatingText(player.x, player.y, "SLAY +3HP", "#ff7979")); }
         } else if(this.name === 'Ibby') {
             enemies.forEach(e => { if(Math.hypot(e.x-this.x, e.y-this.y) < 80) { e.hp -= 1; e.pushX = (e.x-this.x)*3; e.pushY = (e.y-this.y)*3; } });
         } else if(this.name === 'Sean') {
-            enemies.forEach(e => { if(Math.hypot(e.x-this.x, e.y-this.y) < 150) { e.hp -= 5*dt; e.pushX += (e.x-this.x)*5*dt; e.pushY += (e.y-this.y)*5*dt; } });
+            if(level === 3) { 
+               enemies.forEach(e => { if(Math.hypot(e.x-this.x, e.y-this.y) < 200) { e.hp -= 50*dt; let ang = Math.atan2(e.y-this.y, e.x-this.x); e.pushX += Math.cos(ang)*900*dt; e.pushY += Math.sin(ang)*900*dt; } });
+            } else {
+               enemies.forEach(e => { if(Math.hypot(e.x-this.x, e.y-this.y) < 150) { e.hp -= 5*dt; e.pushX += (e.x-this.x)*5*dt; e.pushY += (e.y-this.y)*5*dt; } });
+            }
         }
     }
     draw(ctx) {
-        if(this.name === 'Sean') { ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(this.x, this.y, 150, 0, Math.PI*2); ctx.stroke(); }
-        ctx.font = '30px Arial'; ctx.textAlign = 'center'; ctx.fillText(this.emoji, this.x, this.y+10);
-        ctx.font = '8px "Press Start 2P"'; ctx.fillStyle = 'white'; ctx.fillText(this.name, this.x, this.y-25);
+        let dance = (level === 6 && endingPhase >= 2) ? Math.sin(Date.now()/100)*10 : 0;
+        if(this.name === 'Sean') { ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(this.x, this.y + dance, (level===3?200:150), 0, Math.PI*2); ctx.stroke(); }
+        ctx.font = '30px Arial'; ctx.textAlign = 'center'; ctx.fillText(this.emoji, this.x, this.y+10 + dance);
+        ctx.font = '8px "Press Start 2P"'; ctx.fillStyle = 'white'; ctx.fillText(this.name, this.x, this.y-25 + dance);
     }
 }
 
@@ -654,6 +628,7 @@ let bossIntroState = 0; let bossIntroTimer = 0; let cutsceneHuTao = null;
 function checkWallCollision(x, y, r, walls) { for(let w of walls) { if (x > w.x && x < w.x + w.w && y > w.y && y < w.y + w.h) return true; } return false; }
 
 function shootDice() {
+    if (level === 6) return; 
     let target = null, minD = 900;
     if(level === 5 && boss) target = boss;
     else enemies.forEach(e => { let d = Math.hypot(e.x - player.x, e.y - player.y); if(d < minD) { minD = d; target = e; } });
@@ -674,8 +649,10 @@ function spawnEnemy() {
 
     if(gameMode === 'ARCADE') {
         let r = Math.random(); let type = 'WOBBUFFET';
-        if(arcadeWave > 1 && r > 0.5) type = 'APPLE'; if(arcadeWave > 2 && r > 0.7) type = 'POLICE';
-        if(arcadeWave > 3 && r > 0.8) type = 'CREEPER'; if(arcadeWave > 4 && r > 0.9) type = 'ROLL';
+        if(arcadeWave > 1 && r > 0.4) type = 'APPLE'; 
+        if(arcadeWave > 2 && r > 0.6) type = 'POLICE';
+        if(arcadeWave > 3 && r > 0.75) type = 'CREEPER';
+        if(arcadeWave > 4 && r > 0.85) type = 'ROLL';
         enemies.push(new Enemy(type, x, y)); return;
     }
     let type = 'WOBBUFFET';
@@ -689,26 +666,45 @@ function generateMap() {
     for(let i=0; i<40; i++) { let x = (Math.random()*MAP_SIZE*2)-MAP_SIZE; let y = (Math.random()*MAP_SIZE*2)-MAP_SIZE; if(Math.hypot(x, y)>300) walls.push({x, y, w:80, h:80}); }
 }
 
+function showCharSelect() {
+    document.getElementById('start-screen').classList.add('hidden');
+    document.getElementById('char-select-screen').classList.remove('hidden');
+}
+
+function startArcade(skin) {
+    playerSkin = skin;
+    startGame('ARCADE');
+}
+
 function startGame(mode) {
-    gameMode = mode; level = 1; enemiesKilled = 0; score = 0; arcadeWave = 1;
+    gameMode = mode; level = 1; enemiesKilled = 0; score = 0; arcadeWave = 1; waveKills = 0;
     player = new Player(); enemies = []; projectiles = []; friends = []; pickups = []; floatingTexts = []; particles = [];
     boss = null; generateMap(); AudioSys.init(); AudioSys.playBGM(false);
     
     document.getElementById('start-screen').classList.add('hidden');
     document.getElementById('level-select-screen').classList.add('hidden');
+    document.getElementById('char-select-screen').classList.add('hidden');
     document.getElementById('victory-screen').classList.add('hidden');
     document.getElementById('game-over-screen').classList.add('hidden');
     document.getElementById('boss-hp-container').style.display = 'none';
+    document.getElementById('upgrade-overlay').classList.add('hidden');
     
-    if(gameMode === 'STORY') loadLevel(1);
-    else { gameState = 'PLAY'; document.getElementById('location-text').innerText = "ARCADE"; document.getElementById('objective-text').innerText = "SURVIVE"; }
+    if(gameMode === 'STORY') { playerSkin = 'Connery'; loadLevel(1); }
+    else { 
+        gameState = 'PLAY'; 
+        enemiesInWave = 10 + arcadeWave * 5; 
+        document.getElementById('location-text').innerText = "ARCADE"; 
+        updateArcadeHud();
+    }
     lastTime = performance.now(); requestAnimationFrame(gameLoop);
 }
 
-function startLevel(lvl) {
-    startGame('STORY');
-    loadLevel(lvl);
+function updateArcadeHud() {
+    document.getElementById('objective-text').innerText = `Kill: ${waveKills}/${enemiesInWave}`;
+    document.getElementById('wave-text').innerText = "WAVE " + arcadeWave;
 }
+
+function startLevel(lvl) { startGame('STORY'); loadLevel(lvl); }
 
 function loadLevel(lvl) {
     level = lvl; enemies = []; projectiles = []; pickups = []; player.x = 0; player.y = 0; generateMap();
@@ -726,8 +722,9 @@ function loadLevel(lvl) {
     } else if (lvl === 3) {
         document.getElementById('location-text').innerText = "HOSPITAL"; document.getElementById('objective-text').innerText = "Survive Allergy";
         friends = [new Friend('Samir', '💅', -50, 50), new Friend('Ibby', '💪', 50, 50), new Friend('Sean', '💻', 0, 100)];
+        queueDialogue('IBBY', "Connery, remember you're deathly allergic!");
+        queueDialogue('SAMIR', "Careful or I'll give you a needle in the bum!");
         queueDialogue('IBBY', "My pre-workout just kicked in. Let's go!");
-        queueDialogue('SAMIR', "My skin is breaking out!");
         queueDialogue('SAMIR', "Rawr xD... wait did I say that out loud?");
         queueDialogue('SEAN', "My shield damages them continuously!");
     } else if (lvl === 4) {
@@ -746,6 +743,7 @@ function loadLevel(lvl) {
         queueDialogue('HU TAO', "Connery! Help me!"); queueDialogue('CONNERY', "Hu Tao!");
         queueDialogue('HU TAO', "Oya? Save me and I'll give you a discount on a coffin!");
         queueDialogue('IBBY', "That dragon skipped leg day. Easy wins.");
+        queueDialogue('ENDER DRAGON', "ROAR! I STOLE YOUR GIRL!");
         queueDialogue('SEAN', "It's the Ender Dragon! He has 10k HP!");
         queueDialogue('CONNERY', "Not on my birthday.");
     } else if (lvl === 6) { startEndingSequence(); return; }
@@ -754,6 +752,9 @@ function loadLevel(lvl) {
 
 function queueDialogue(name, text) { dialogueQueue.push({name, text}); }
 function showNextDialogue() {
+    if (dialogueCooldown > 0) return; 
+    dialogueCooldown = 0.5; 
+
     if(dialogueQueue.length > 0) {
         const d = dialogueQueue.shift(); document.getElementById('dialogue-name').innerText = d.name; document.getElementById('dialogue-text').innerText = d.text;
         document.getElementById('dialogue-box').style.display = 'block';
@@ -765,7 +766,15 @@ function showPopup(text) {
 }
 
 function checkWinCondition() {
-    if(gameMode === 'ARCADE') { arcadeKills++; if(arcadeKills > arcadeWave * 15) gameState = 'UPGRADE'; return; }
+    if(gameMode === 'ARCADE') { 
+        waveKills++; 
+        updateArcadeHud();
+        if(waveKills >= enemiesInWave) {
+            // Arcade Upgrade Trigger - Seamless
+            document.getElementById('upgrade-overlay').classList.remove('hidden');
+        }
+        return; 
+    }
     if (level === 5) return;
     const goals = [20, 25, 30, 30];
     document.getElementById('objective-text').innerText = `Kill: ${enemiesKilled}/${goals[level-1]}`;
@@ -774,40 +783,108 @@ function checkWinCondition() {
 
 function applyUpgrade(type) {
     if(type === 'speed') player.speed += 50; if(type === 'damage') player.dmgMult += 0.5; if(type === 'heal') player.hp = 125;
-    arcadeWave++; arcadeKills = 0; document.getElementById('wave-text').innerText = "WAVE " + arcadeWave; document.getElementById('upgrade-screen').classList.add('hidden'); gameState = 'PLAY';
+    
+    // Seamless Arcade
+    document.getElementById('upgrade-overlay').classList.add('hidden');
+    arcadeWave++; 
+    waveKills = 0;
+    enemiesInWave = 10 + arcadeWave * 5;
+    updateArcadeHud();
+    showPopup("WAVE " + arcadeWave + " STARTED!");
 }
 
 function startEndingSequence() {
     level = 6; enemies = []; projectiles = []; boss = null;
     document.getElementById('boss-hp-container').style.display = 'none';
+    document.getElementById('location-text').innerText = "ROATH PARK";
+    document.getElementById('objective-text').innerText = "Marry Hu Tao";
     AudioSys.playBGM(false);
     player.x = 0; player.y = 300;
     friends = [
         new Friend('Bakshi', '🐵', -100, 300), new Friend('Rishi', '🧀', 100, 300),
         new Friend('Ibby', '💪', -150, 320), new Friend('Sean', '💻', 150, 320),
-        new Friend('Samir', '💅', -50, 350), new Friend('Sebastian', '👨‍🦰', 50, 350)
+        new Friend('Samir', '💅', -50, 350), new Friend('Sebastian', '👨‍🦰', 50, 350),
+        new Friend('Hu Tao', '👻', 0, 350)
     ];
     queueDialogue('SEBASTIAN', "We did it! Let's go to the monument.");
-    endingPhase = 1; gameState = 'PAUSE_DIALOGUE'; showNextDialogue();
+    endingPhase = 1; 
+    // Force a failsafe trigger for phase 2 just in case movement gets stuck
+    setTimeout(() => { if(endingPhase === 1) endingPhase = 2; }, 4000); 
+    
+    gameState = 'PAUSE_DIALOGUE'; showNextDialogue();
 }
 
-function createParticle(x, y, color, count) {
-    for(let i=0; i<count; i++) particles.push(new Particle(x, y, color));
+function startBossDeath() {
+    gameState = 'BOSS_DEATH';
+    bossDeathTimer = 4.0; // 4 seconds of drama
+    // Clear projectiles
+    projectiles = [];
+}
+
+function createParticle(x, y, color, count) { for(let i=0; i<count; i++) particles.push(new Particle(x, y, color)); }
+function killEnemy(e) {
+    e.markedForDeletion = true; enemiesKilled++; score += 100; document.getElementById('score').innerText = "SCORE: " + score;
+    checkWinCondition(); 
+    // Always drop heals in Arcade
+    if(gameMode === 'ARCADE') {
+        if(Math.random() > 0.5) pickups.push(new Pickup(e.x, e.y));
+    } else {
+        if(Math.random() > 0.8) pickups.push(new Pickup(e.x, e.y));
+    }
+    
+    if(e.type === 'APPLE' || e.type === 'CREEPER') {
+        AudioSys.sfxExplode(); createParticle(e.x, e.y, '#f00', 10);
+        enemies.forEach(other => { if(other !== e && Math.hypot(e.x - other.x, e.y - other.y) < 150) { other.hp -= 20; other.pushX += (other.x - e.x)*3; other.pushY += (other.y - e.y)*3; } });
+    }
+}
+
+function gameOver() {
+    gameState = 'GAMEOVER';
+    document.getElementById('final-score-disp').innerText = "Score: " + score;
+    document.getElementById('game-over-screen').classList.remove('hidden');
 }
 
 function gameLoop(timestamp) {
     if(gameState === 'GAMEOVER') return;
-    if(gameState === 'UPGRADE') { document.getElementById('upgrade-screen').classList.remove('hidden'); return; }
+    
     const dt = Math.min((timestamp - lastTime) / 1000, 0.1); lastTime = timestamp;
     requestAnimationFrame(gameLoop);
+    
+    if(dialogueCooldown > 0) dialogueCooldown -= dt; 
     if(gameState === 'PAUSE_DIALOGUE') return;
+
+    if(gameState === 'BOSS_DEATH') {
+        bossDeathTimer -= dt;
+        // Shake Boss
+        if(Math.random()>0.5) createParticle(boss.x + (Math.random()-0.5)*100, boss.y + (Math.random()-0.5)*100, '#a020f0', 1);
+        if(bossDeathTimer % 0.5 < 0.1) AudioSys.sfxExplode();
+        
+        // Draw scene static
+        ctx.clearRect(0,0,canvas.width, canvas.height);
+        const cx = -player.x + canvas.width/2; const cy = -player.y + canvas.height/2;
+        ctx.save();
+        ctx.fillStyle = '#220022'; ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.translate(cx + (Math.random()-0.5)*10, cy + (Math.random()-0.5)*10); // Screen shake
+        if(boss) boss.draw(ctx);
+        player.draw(ctx);
+        particles.forEach(p => { p.update(dt); p.draw(ctx); });
+        ctx.restore();
+        
+        if(bossDeathTimer <= 0) {
+            boss = null; loadLevel(6);
+        }
+        return;
+    }
 
     timeElapsed += dt;
 
     player.update(dt, walls);
     friends.forEach(f => f.update(dt, enemies, player, friends));
     if(boss) boss.update(dt);
-    if(enemies.length < (gameMode==='ARCADE'?5+arcadeWave*3:5+level*3) && Math.random() < 0.05) spawnEnemy();
+    
+    // Spawning Logic
+    const maxEnemies = gameMode === 'ARCADE' ? 5 + arcadeWave * 2 : 5 + level * 3;
+    if(enemies.length < maxEnemies && Math.random() < 0.05) spawnEnemy();
 
     enemies.forEach(e => e.update(dt, player, walls));
     projectiles.forEach(p => {
@@ -817,7 +894,8 @@ function gameLoop(timestamp) {
                 p.markedForDeletion = true; let dmg = p.type === 'DICE' ? p.roll * 8 * player.dmgMult : 10;
                 boss.hp -= dmg; document.getElementById('boss-hp-fill').style.width = (boss.hp / boss.maxHp * 100) + '%';
                 createParticle(p.x, p.y, '#a020f0', 3);
-                if(boss.hp <= 0) { boss = null; loadLevel(6); }
+                // Boss Death Trigger
+                if(boss.hp <= 0 && gameState !== 'BOSS_DEATH') { startBossDeath(); }
             }
             enemies.forEach(e => {
                 if(!e.markedForDeletion && e.type !== 'FIREBALL' && Math.hypot(p.x - e.x, p.y - e.y) < e.radius + 10) {
@@ -846,7 +924,7 @@ function gameLoop(timestamp) {
             if(e.type === 'CREEPER') { e.markedForDeletion = true; AudioSys.sfxExplode(); createParticle(player.x, player.y, '#f00', 10); player.hp -= 30; }
             if(e.type === 'FIREBALL') { e.markedForDeletion = true; player.hp -= 5; }
             document.getElementById('hp-fill').style.width = Math.max(0, player.hp/1.25) + '%';
-            if(player.hp <= 0) { gameState = 'GAMEOVER'; document.getElementById('game-over-screen').classList.remove('hidden'); }
+            if(player.hp <= 0) gameOver();
         }
     });
 
@@ -885,17 +963,24 @@ function gameLoop(timestamp) {
     if(level === 1) ctx.fillStyle = '#1a1a2e'; else if(level === 2) ctx.fillStyle = '#2d3436';
     else if(level === 3) ctx.fillStyle = '#ecf0f1'; else if(level === 4) ctx.fillStyle = '#2c3e50';
     else if(level === 5) ctx.fillStyle = '#220022';
+    else if(level === 6) ctx.fillStyle = '#3498db'; // Roath Park Water
     else ctx.fillStyle = '#222';
     ctx.fillRect(0,0,canvas.width,canvas.height);
     
     // Level 6 Sky BG
     if(level === 6) {
-        let grad = ctx.createLinearGradient(0,0,0,canvas.height);
-        grad.addColorStop(0, '#000033'); grad.addColorStop(1, '#660066');
-        ctx.fillStyle = grad; ctx.fillRect(0,0,canvas.width, canvas.height);
+        // Only fill part of it to look like water vs sky if panning? 
+        // Let's just make it all blueish for lake effect
+        ctx.fillStyle = '#3498db'; 
+        ctx.fillRect(0,0,canvas.width, canvas.height);
     }
 
-    ctx.translate(cx, cy);
+    // ZOOM LOGIC (Mobile Zoom Out)
+    let zoom = canvas.width < 600 ? 0.6 : 1;
+    const zcx = -player.x + (canvas.width / zoom) / 2;
+    const zcy = -player.y + (canvas.height / zoom) / 2;
+    ctx.scale(zoom, zoom);
+    ctx.translate(zcx, zcy);
 
     // Level 6 Camera Pan up
     if(level === 6 && endingPhase >= 2) {
@@ -905,8 +990,11 @@ function gameLoop(timestamp) {
     const gridSize = 100;
     const startCol = Math.floor((player.x - canvas.width)/gridSize); const endCol = Math.floor((player.x + canvas.width)/gridSize);
     const startRow = Math.floor((player.y - canvas.height)/gridSize); const endRow = Math.floor((player.y + canvas.height)/gridSize);
-    ctx.strokeStyle = (level === 3) ? '#bdc3c7' : '#333'; ctx.lineWidth = 2;
-    for(let c=startCol; c<=endCol; c++) { for(let r=startRow; r<=endRow; r++) { ctx.strokeRect(c*gridSize, r*gridSize, gridSize, gridSize); } }
+    
+    if (level !== 6) {
+        ctx.strokeStyle = (level === 3) ? '#bdc3c7' : '#333'; ctx.lineWidth = 2;
+        for(let c=startCol; c<=endCol; c++) { for(let r=startRow; r<=endRow; r++) { ctx.strokeRect(c*gridSize, r*gridSize, gridSize, gridSize); } }
+    }
 
     if(gameMode === 'ARCADE' || level === 5) {
         let lim = level === 5 ? 900 : ARCADE_LIMIT; ctx.strokeStyle = 'red'; ctx.lineWidth = 5; ctx.strokeRect(-lim, -lim, lim*2, lim*2);
@@ -920,8 +1008,30 @@ function gameLoop(timestamp) {
     });
 
     if(level === 6) {
-        ctx.fillStyle = 'white'; ctx.fillRect(-40, -100, 80, 200); ctx.fillStyle = '#bdc3c7'; ctx.beginPath(); ctx.arc(0, -60, 25, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = 'black'; ctx.font = '20px Arial'; ctx.fillText('XII', -10, -55); ctx.fillStyle = '#e74c3c'; ctx.beginPath(); ctx.moveTo(-50, -100); ctx.lineTo(50, -100); ctx.lineTo(0, -160); ctx.fill();
+        // Draw Roath Park Paths
+        ctx.fillStyle = '#95a5a6'; // Concrete path
+        ctx.fillRect(-600, 250, 1200, 200); // Main promenade
+        
+        // Lighthouse Monument
+        ctx.save();
+        ctx.translate(0, -50);
+        // Base
+        ctx.fillStyle = '#ecf0f1';
+        ctx.beginPath();
+        ctx.moveTo(-40, 200); ctx.lineTo(40, 200); ctx.lineTo(30, 0); ctx.lineTo(-30, 0);
+        ctx.fill();
+        // Top
+        ctx.fillStyle = '#ecf0f1'; ctx.fillRect(-35, -40, 70, 40);
+        // Clock
+        ctx.fillStyle = 'black'; ctx.beginPath(); ctx.arc(0, -20, 15, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(0, -20, 12, 0, Math.PI*2); ctx.fill();
+        // Hands
+        ctx.strokeStyle = 'black'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(0, -30); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(5, -20); ctx.stroke();
+        // Roof
+        ctx.fillStyle = '#34495e';
+        ctx.beginPath(); ctx.moveTo(-40, -40); ctx.lineTo(40, -40); ctx.lineTo(0, -70); ctx.fill();
+        ctx.restore();
     }
     
     if(level === 5 && bossIntroState === 1 && cutsceneHuTao) {
@@ -949,26 +1059,48 @@ function gameLoop(timestamp) {
         if(endingPhase === 1) { 
              let atTarget = true;
              [player, ...friends].forEach(ent => {
-                 let tx = ent === player ? 0 : ent.x * 0.9; let ty = ent === player ? 100 : 100 + (ent.x%50);
-                 let dx = tx - ent.x; let dy = ty - ent.y;
-                 if(Math.abs(dx) > 5 || Math.abs(dy) > 5) { ent.x += dx * dt; ent.y += dy * dt; atTarget = false; }
+                 let tx = ent === player ? 0 : ent.x * 0.9; 
+                 // Space them out in a circle
+                 let idx = friends.indexOf(ent) + 1;
+                 if (ent === player) idx = 0;
+                 let angle = (idx / (friends.length + 1)) * Math.PI * 2; 
+                 
+                 let ty = 350 + Math.sin(angle) * 100;
+                 let txFinal = Math.cos(angle) * 150;
+                 
+                 let dx = txFinal - ent.x; let dy = ty - ent.y;
+                 if(Math.abs(dx) > 5 || Math.abs(dy) > 5) { ent.x += dx * 2 * dt; ent.y += dy * 2 * dt; atTarget = false; }
              });
-             if(atTarget && endingTimer > 2) { endingPhase = 2; endingTimer = 0; }
+             // Immediate transition to phase 2 when movement done
+             if(atTarget) { endingPhase = 2; endingTimer = 0; }
         } else if (endingPhase === 2) { 
+            
+            // Move Hu Tao to Connery's side
+            let huTao = friends.find(f => f.name === 'Hu Tao');
+            if(huTao) {
+                let htx = player.x - 25; let hty = player.y;
+                huTao.x += (htx - huTao.x) * 2 * dt;
+                huTao.y += (hty - huTao.y) * 2 * dt;
+            }
+
             // Celebration Text
             ctx.font = '30px "Press Start 2P"'; ctx.textAlign = 'center'; ctx.fillStyle = `hsl(${Date.now()/5 % 360}, 100%, 50%)`;
             ctx.fillText("CELEBRATE!", canvas.width/2, 150);
 
-            if(Math.random() < 0.1) { // Fireworks
-                let fx = (Math.random()*800) - 400; // Relative to monument
-                let fy = (Math.random()*400) - 600; 
+            // GLAMOUR FIREWORKS
+            if(Math.random() < 0.3) { 
+                // Cluster 1: Around Tower
+                let fx = (Math.random()*400) - 200; 
+                let fy = (Math.random()*200) - 200;
                 let col = getRandomColor();
-                // Spawn particles in world space (relative to monument)
-                // Actually need to translate these because they are drawn inside ctx.translate block in particle loop?
-                // No, createParticle pushes to array which is drawn in world space.
-                for(let i=0; i<30; i++) {
-                    particles.push(new Particle(fx, fy, col, 2));
-                }
+                for(let i=0; i<30; i++) { particles.push(new Particle(fx, fy, col, 2)); }
+                
+                // Cluster 2: Around Player
+                let px = player.x + (Math.random()*600) - 300;
+                let py = player.y + (Math.random()*400) - 400;
+                let col2 = getRandomColor();
+                for(let i=0; i<30; i++) { particles.push(new Particle(px, py, col2, 2)); }
+
                 AudioSys.sfxThrow();
             }
             if(endingTimer > 8) { endingPhase = 3; endingTimer = 0; }
@@ -984,14 +1116,6 @@ function gameLoop(timestamp) {
 
 function getRandomColor() { return ['#f00','#0f0','#00f','#ff0','#0ff','#f0f'][Math.floor(Math.random()*6)]; }
 function createParticle(x, y, color, count) { for(let i=0; i<count; i++) particles.push(new Particle(x, y, color)); }
-function killEnemy(e) {
-    e.markedForDeletion = true; enemiesKilled++; score += 100; document.getElementById('score').innerText = "SCORE: " + score;
-    checkWinCondition(); if(Math.random() > 0.8) pickups.push(new Pickup(e.x, e.y));
-    if(e.type === 'APPLE' || e.type === 'CREEPER') {
-        AudioSys.sfxExplode(); createParticle(e.x, e.y, '#f00', 10);
-        enemies.forEach(other => { if(other !== e && Math.hypot(e.x - other.x, e.y - other.y) < 150) { other.hp -= 20; other.pushX += (other.x - e.x)*3; other.pushY += (other.y - e.y)*3; } });
-    }
-}
 </script>
 </body>
 </html>
